@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useMemo, useEffect } from "react";
 import { useAppState } from "@/hooks/useAppState";
 import { useResumeManager } from "@/hooks/useResumeManager";
 import { useJobFormSubmit } from "@/hooks/useJobFormSubmit";
@@ -33,16 +33,28 @@ import {
 import { Progress } from "./ui/progress";
 import ResumeUploader from "./ResumeUploader";
 import Link from "next/link";
-import { motion } from "motion/react";
 
 const formSchema = z.object({
-  jobTitle: z.string().min(1, "Job title is required"),
-  company: z.string().min(1, "Company name is required"),
-  techStack: z.string().min(1, "Tech stack is required"),
+  jobTitle: z
+    .string()
+    .min(1, "Job title is required")
+    .trim(),
+  company: z
+    .string()
+    .min(1, "Company name is required")
+    .trim(),
+  techStack: z
+    .string()
+    .min(1, "Tech stack is required")
+    .trim(),
   description: z
     .string()
-    .min(50, "Please provide a more detailed description (min 50 chars)"),
-  companyDetails: z.string().optional(),
+    .min(50, "Please provide a more detailed description (min 50 chars)")
+    .trim(),
+  companyDetails: z
+    .string()
+    .trim()
+    .optional(),
 });
 
 export default function JobForm() {
@@ -55,8 +67,6 @@ export default function JobForm() {
     parseResume,
     clearResume,
   } = useResumeManager({ updateState });
-  const handleParseResume = useCallback(parseResume, [parseResume]);
-  const handleClearResume = useCallback(clearResume, [clearResume]);
   const { handleSubmit: handleFormSubmit } = useJobFormSubmit({
     updateState,
     parsedResume,
@@ -73,61 +83,86 @@ export default function JobForm() {
     },
   });
 
-  const isProcessing =
-    appState.status === "parsing" || appState.status === "generating";
-  const isResumeReady = !!parsedResume && appState.status !== "parsing";
-  const canSubmit = isResumeReady && !isProcessing;
+  // Memoize computed state to prevent unnecessary re-renders
+  const { isProcessing, isResumeReady, canSubmit } = useMemo(() => {
+    const processing =
+      appState.status === "parsing" || appState.status === "generating";
+    const resumeReady = !!parsedResume && appState.status !== "parsing";
+    return {
+      isProcessing: processing,
+      isResumeReady: resumeReady,
+      canSubmit: resumeReady && !processing,
+    };
+  }, [appState.status, parsedResume]);
 
-  const StatusIndicator = () => {
+  // Reset form when submission is complete
+  useEffect(() => {
+    if (appState.status === "complete") {
+      form.reset();
+    }
+  }, [appState.status, form]);
+
+  // Memoize status indicator configuration to prevent unnecessary re-renders
+  const statusConfig = useMemo(() => {
+    const configs = {
+      error: {
+        icon: <AlertCircle className='h-4 w-4 text-red-400' />,
+        colorClass: "text-red-400",
+        bgColorClass: "bg-red-900/30 border-red-700",
+        progressColorVar: "hsl(0 84.2% 60.2%)",
+      },
+      success: {
+        icon: <CheckCircle2 className='h-4 w-4 text-green-400' />,
+        colorClass: "text-green-400",
+        bgColorClass: "bg-green-900/30 border-green-700",
+        progressColorVar: "hsl(142.1 76.2% 36.3%)",
+      },
+      default: {
+        icon: <Loader2 className='h-4 w-4 animate-spin text-blue-400' />,
+        colorClass: "text-blue-400",
+        bgColorClass: "bg-blue-900/30 border-blue-700",
+        progressColorVar: "hsl(221.2 83.2% 53.3%)",
+      },
+    };
+
+    if (appState.status === "error") return configs.error;
+    if (isResumeReady && appState.status === "idle") return configs.success;
+    return configs.default;
+  }, [appState.status, isResumeReady]);
+
+  const StatusIndicator = useMemo(() => {
+    // Don't show indicator in these cases
     if (appState.status === "idle" && !isResumeReady && appState.progress === 0)
       return null;
     if (appState.status === "complete") return null;
 
-    let icon = <Loader2 className='h-4 w-4 animate-spin text-blue-400' />;
-    let colorClass = "text-blue-400";
-    let bgColorClass = "bg-blue-900/30 border-blue-700";
-    let progressColorVar = "hsl(221.2 83.2% 53.3%)";
-
-    if (appState.status === "error") {
-      icon = <AlertCircle className='h-4 w-4 text-red-400' />;
-      colorClass = "text-red-400";
-      bgColorClass = "bg-red-900/30 border-red-700";
-      progressColorVar = "hsl(0 84.2% 60.2%)";
-    } else if (isResumeReady && appState.status === "idle") {
-      icon = <CheckCircle2 className='h-4 w-4 text-green-400' />;
-      colorClass = "text-green-400";
-      bgColorClass = "bg-green-900/30 border-green-700";
-      progressColorVar = "hsl(142.1 76.2% 36.3%)";
-    }
+    const showProgress =
+      appState.status === "parsing" ||
+      appState.status === "generating" ||
+      (isResumeReady && appState.status === "idle");
 
     return (
-      <motion.div
-        initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
-        exit={{ opacity: 0 }}
-        transition={{ duration: 0.8, ease: "easeOut" }}
-        className={`w-full p-3 px-4 mt-6 mb-2 rounded-lg border ${bgColorClass}`}
-        style={{ "--primary": progressColorVar } as React.CSSProperties}
+      <div
+        className={`w-full p-3 px-4 mt-6 mb-2 rounded-lg border ${statusConfig.bgColorClass} transition-all duration-300`}
+        style={
+          { "--primary": statusConfig.progressColorVar } as React.CSSProperties
+        }
       >
         <div className='flex justify-between items-center mb-1'>
           <span
-            className={`text-sm font-medium flex items-center gap-2 ${colorClass}`}
+            className={`text-sm font-medium flex items-center gap-2 ${statusConfig.colorClass}`}
           >
-            {icon}
+            {statusConfig.icon}
             {appState.stage ||
               (isResumeReady ? "Resume ready" : "Awaiting input")}
           </span>
-          {(appState.status === "parsing" ||
-            appState.status === "generating" ||
-            (isResumeReady && appState.status === "idle")) && (
-            <span className={`text-sm font-medium ${colorClass}`}>
+          {showProgress && (
+            <span className={`text-sm font-medium ${statusConfig.colorClass}`}>
               {appState.progress}%
             </span>
           )}
         </div>
-        {(appState.status === "parsing" ||
-          appState.status === "generating" ||
-          (isResumeReady && appState.status === "idle")) && (
+        {showProgress && (
           <Progress value={appState.progress} className='h-1.5' />
         )}
         {appState.status === "error" && appState.error && (
@@ -135,9 +170,9 @@ export default function JobForm() {
             {appState.error}
           </p>
         )}
-      </motion.div>
+      </div>
     );
-  };
+  }, [appState, isResumeReady, statusConfig]);
 
   return (
     <main className='min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-slate-200'>
@@ -147,12 +182,7 @@ export default function JobForm() {
       </div>
 
       <div className='relative max-w-7xl mx-auto px-4 py-12 md:py-10 z-10'>
-        <motion.div
-          className='flex flex-col sm:flex-row items-center justify-between mb-10'
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, ease: "easeOut" }}
-        >
+        <div className='flex flex-col sm:flex-row items-center justify-between mb-10'>
           <div>
             <h1 className='text-3xl md:text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 pb-1'>
               AI Application Assistant
@@ -162,37 +192,37 @@ export default function JobForm() {
             </p>
           </div>
           <Link href='/history' className='mt-4 sm:mt-0'>
-            <motion.div
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            <Button
+              variant='outline'
+              size='sm'
+              className='gap-2 bg-slate-800/50 border-slate-700 hover:bg-slate-700/50 text-slate-300 hover:text-white transition-all duration-200 hover:scale-105'
             >
-              <Button
-                variant='outline'
-                size='sm'
-                className='gap-2 bg-slate-800/50 border-slate-700 hover:bg-slate-700/50 text-slate-300 hover:text-white'
-              >
-                <History className='h-4 w-4' />
-                View History
-              </Button>
-            </motion.div>
+              <History className='h-4 w-4' />
+              View History
+            </Button>
           </Link>
-        </motion.div>
+        </div>
 
-        <motion.div
-          className='bg-slate-900/70 border border-slate-700/80 rounded-xl shadow-2xl shadow-indigo-950/30 backdrop-blur-lg overflow-hidden'
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
-        >
+        <div className='bg-slate-900/70 border border-slate-700/80 rounded-xl shadow-2xl shadow-indigo-950/30 backdrop-blur-lg overflow-hidden'>
           <Form {...form}>
             <form
               onSubmit={form.handleSubmit(handleFormSubmit)}
               className='divide-y divide-slate-700/80'
+              noValidate
+              aria-label='Job application form'
             >
-              <div className='p-6 space-y-5'>
-                <h3 className='text-lg font-semibold text-slate-100 flex items-center gap-2'>
-                  <Briefcase className='w-5 h-5 text-purple-400' />
+              <section
+                className='p-6 space-y-5'
+                aria-labelledby='job-info-heading'
+              >
+                <h3
+                  id='job-info-heading'
+                  className='text-lg font-semibold text-slate-100 flex items-center gap-2'
+                >
+                  <Briefcase
+                    className='w-5 h-5 text-purple-400'
+                    aria-hidden='true'
+                  />
                   Job Information
                 </h3>
                 <div className='grid md:grid-cols-2 gap-5'>
@@ -260,11 +290,20 @@ export default function JobForm() {
                     </FormItem>
                   )}
                 />
-              </div>
+              </section>
 
-              <div className='p-6 space-y-4'>
-                <h3 className='text-lg font-semibold text-slate-100 flex items-center gap-2'>
-                  <FileText className='w-5 h-5 text-purple-400' />
+              <section
+                className='p-6 space-y-4'
+                aria-labelledby='resume-heading'
+              >
+                <h3
+                  id='resume-heading'
+                  className='text-lg font-semibold text-slate-100 flex items-center gap-2'
+                >
+                  <FileText
+                    className='w-5 h-5 text-purple-400'
+                    aria-hidden='true'
+                  />
                   Your Resume
                 </h3>
                 <ResumeUploader
@@ -274,8 +313,8 @@ export default function JobForm() {
                   setParsedResume={setParsedResume}
                   appState={appState}
                   updateState={updateState}
-                  clearResume={handleClearResume}
-                  parseResume={handleParseResume}
+                  clearResume={clearResume}
+                  parseResume={parseResume}
                 />
                 {!isResumeReady && !isProcessing && (
                   <FormDescription className='text-xs text-center text-slate-500 pt-1'>
@@ -283,11 +322,20 @@ export default function JobForm() {
                     generate tailored responses.
                   </FormDescription>
                 )}
-              </div>
+              </section>
 
-              <div className='p-6 space-y-5'>
-                <h3 className='text-lg font-semibold text-slate-100 flex items-center gap-2'>
-                  <Info className='w-5 h-5 text-purple-400' />
+              <section
+                className='p-6 space-y-5'
+                aria-labelledby='context-heading'
+              >
+                <h3
+                  id='context-heading'
+                  className='text-lg font-semibold text-slate-100 flex items-center gap-2'
+                >
+                  <Info
+                    className='w-5 h-5 text-purple-400'
+                    aria-hidden='true'
+                  />
                   Additional Context
                 </h3>
                 <FormField
@@ -331,27 +379,41 @@ export default function JobForm() {
                     </FormItem>
                   )}
                 />
-              </div>
+              </section>
 
-              <div className='p-6'>
-                <StatusIndicator />
+              <section className='p-6' aria-labelledby='submit-section'>
+                {StatusIndicator}
 
                 <Button
                   type='submit'
-                  className={`w-full py-3 text-base font-semibold rounded-lg transition-all duration-300 flex items-center justify-center gap-2
-                    ${!canSubmit ? "bg-slate-700 text-slate-500 cursor-not-allowed" : "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-purple-500"}
-                  `}
+                  className={`w-full py-3 text-base font-semibold rounded-lg transition-all duration-200 flex items-center justify-center gap-2
+                    ${
+                      !canSubmit
+                        ? "bg-slate-700 text-slate-500 cursor-not-allowed"
+                        : "bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl focus:ring-2 focus:ring-offset-2 focus:ring-offset-slate-900 focus:ring-purple-500"
+                    }`}
                   disabled={!canSubmit}
+                  aria-label={
+                    appState.status === "generating"
+                      ? "Generating responses..."
+                      : "Generate AI responses"
+                  }
                 >
                   {appState.status === "generating" ? (
                     <>
-                      <Loader2 className='h-5 w-5 animate-spin' />
+                      <Loader2
+                        className='h-5 w-5 animate-spin'
+                        aria-hidden='true'
+                      />
                       Generating...
                     </>
                   ) : (
                     <>
                       Generate AI Responses
-                      <Sparkles className='h-5 w-5 ml-1 opacity-80' />
+                      <Sparkles
+                        className='h-5 w-5 ml-1 opacity-80'
+                        aria-hidden='true'
+                      />
                     </>
                   )}
                 </Button>
@@ -361,10 +423,10 @@ export default function JobForm() {
                     Please upload your resume before generating responses.
                   </p>
                 )}
-              </div>
+              </section>
             </form>
           </Form>
-        </motion.div>
+        </div>
       </div>
     </main>
   );

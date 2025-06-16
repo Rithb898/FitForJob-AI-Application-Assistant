@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -31,19 +31,11 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import toast from "react-hot-toast";
-import { motion } from "motion/react";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// --- Type definitions and Simplified Animation Variants ---
+// --- Type definitions ---
 type ApplicationMaterialKey =
   keyof GeneratedContentType["applicationMaterials"];
-
-// Simplified page transition - only essential fade-in
-const pageTransition = {
-  hidden: { opacity: 0 },
-  visible: { opacity: 1, transition: { duration: 0.3, ease: "easeOut" } },
-  exit: { opacity: 0, transition: { duration: 0.2, ease: "easeIn" } },
-};
 
 // --- Skeleton Components (unchanged) ---
 const SkeletonResponseSection = () => (
@@ -134,58 +126,152 @@ export default function ResponsePage() {
     fetchData();
   }, [fetchData]);
 
-  // --- Regeneration Logic (unchanged) ---
-  const handleRegenerate = async (field: ApplicationMaterialKey) => {
-    if (!responseData || !parsedResume || isRegenerating) {
-      if (!parsedResume) {
-        toast.error("Resume data not available for regeneration.");
+  // --- Optimized Regeneration Logic ---
+  const handleRegenerate = useCallback(
+    async (field: ApplicationMaterialKey) => {
+      if (!responseData || !parsedResume || isRegenerating) {
+        if (!parsedResume) {
+          toast.error("Resume data not available for regeneration.");
+        }
+        return;
       }
-      return;
-    }
-    setIsRegenerating(field);
-    const toastId = toast.loading(`Regenerating ${field}...`);
-    try {
-      const response = await fetch("/api/regenerate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          field,
-          data: {
-            jobTitle: responseData.jobTitle,
-            company: responseData.company,
-          },
-          parsedResume,
-        }),
-      });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({
-          message: `Regeneration failed (${response.status})`,
-        }));
-        throw new Error(errorData.message || "Network response was not ok");
+      setIsRegenerating(field);
+      const toastId = toast.loading(`Regenerating ${field}...`);
+
+      try {
+        const response = await fetch("/api/regenerate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            field,
+            data: {
+              jobTitle: responseData.jobTitle,
+              company: responseData.company,
+            },
+            parsedResume,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json().catch(() => ({
+            message: `Regeneration failed (${response.status})`,
+          }));
+          throw new Error(errorData.message || "Network response was not ok");
+        }
+
+        const result = await response.json();
+        const updatedText = result.output;
+
+        if (
+          updatedText &&
+          typeof updatedText === "string" &&
+          applicationMaterials
+        ) {
+          const newMaterials = {
+            ...applicationMaterials,
+            [field]: updatedText,
+          };
+          setApplicationMaterials(newMaterials);
+          toast.success(`${field} regenerated successfully!`, { id: toastId });
+        } else {
+          throw new Error("Invalid response format from regeneration API.");
+        }
+      } catch (error) {
+        console.error("Regeneration error:", error);
+        const message =
+          error instanceof Error ? error.message : "Unknown error";
+        toast.error(`Regeneration failed: ${message}`, { id: toastId });
+      } finally {
+        setIsRegenerating(null);
       }
-      const result = await response.json();
-      const updatedText = result.output;
-      if (
-        updatedText &&
-        typeof updatedText === "string" &&
-        applicationMaterials
-      ) {
-        const newMaterials = { ...applicationMaterials, [field]: updatedText };
-        setApplicationMaterials(newMaterials);
-        // Consider saving the updated data back to history here if needed
-        toast.success(`${field} regenerated successfully!`, { id: toastId });
-      } else {
-        throw new Error("Invalid response format from regeneration API.");
-      }
-    } catch (error) {
-      console.error("Regeneration error:", error);
-      const message = error instanceof Error ? error.message : "Unknown error";
-      toast.error(`Regeneration failed: ${message}`, { id: toastId });
-    } finally {
-      setIsRegenerating(null);
+    },
+    [responseData, parsedResume, isRegenerating, applicationMaterials]
+  );
+
+  // --- Memoized computed values for performance (must be before conditional returns) ---
+  const { formattedDate, applicationSections, contentFlags } = useMemo(() => {
+    // Only compute if we have responseData
+    if (!responseData) {
+      return {
+        formattedDate: "Unknown date",
+        applicationSections: [],
+        contentFlags: {
+          hasApplicationMaterials: false,
+          hasInterviewQuestions: false,
+          hasAnyContent: false,
+        },
+      };
     }
-  };
+
+    const date = responseData.date
+      ? new Date(responseData.date).toLocaleDateString("en-US", {
+          year: "numeric",
+          month: "long",
+          day: "numeric",
+        })
+      : "Unknown date";
+
+    const sections: {
+      key: ApplicationMaterialKey;
+      title: string;
+      icon: React.ReactNode;
+      gradient: string[];
+    }[] = [
+      {
+        key: "interestInCompany",
+        title: "Interest in Company",
+        icon: <Heart className='w-4 h-4' />,
+        gradient: ["from-pink-500", "to-red-500"],
+      },
+      {
+        key: "coverLetter",
+        title: "Cover Letter Snippet",
+        icon: <FileText className='w-4 h-4' />,
+        gradient: ["from-blue-500", "to-cyan-500"],
+      },
+      {
+        key: "whyFit",
+        title: "Why You're a Good Fit",
+        icon: <CheckCircle2 className='w-4 h-4' />,
+        gradient: ["from-green-500", "to-emerald-500"],
+      },
+      {
+        key: "valueAdd",
+        title: "Value You Bring",
+        icon: <Rocket className='w-4 h-4' />,
+        gradient: ["from-orange-500", "to-amber-500"],
+      },
+      {
+        key: "linkedinSummary",
+        title: "LinkedIn Outreach Snippet",
+        icon: <Linkedin className='w-4 h-4' />,
+        gradient: ["from-sky-600", "to-indigo-600"],
+      },
+      {
+        key: "shortAnswer",
+        title: "Quick Form Answer",
+        icon: <Zap className='w-4 h-4' />,
+        gradient: ["from-violet-500", "to-purple-500"],
+      },
+    ];
+
+    const hasApplicationMaterials =
+      applicationMaterials &&
+      Object.values(applicationMaterials).some((val) => !!val);
+    const hasInterviewQuestions = interviewQuestions.length > 0;
+    const hasAnyContent = hasApplicationMaterials || hasInterviewQuestions;
+
+    return {
+      formattedDate: date,
+      applicationSections: sections,
+      contentFlags: {
+        hasApplicationMaterials,
+        hasInterviewQuestions,
+        hasAnyContent,
+      },
+    };
+  }, [responseData, applicationMaterials, interviewQuestions]);
 
   // --- Loading State (Modified Skeleton) ---
   if (loading) {
@@ -241,210 +327,163 @@ export default function ResponsePage() {
     );
   }
 
-  // --- Error State (simplified) ---
+  // --- Error State (optimized) ---
   if (error) {
     return (
       <div className='min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 flex items-center justify-center p-4'>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-        >
-          <Card className='w-full max-w-md bg-red-900/20 border border-red-500/30 text-center backdrop-blur-sm'>
-            <CardHeader>
-              <div className='mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-900/50 border border-red-700/50 mb-4'>
-                <AlertTriangle className='h-6 w-6 text-red-400' />
-              </div>
-              <CardTitle className='text-2xl font-semibold text-slate-100'>
-                Loading Error
-              </CardTitle>
-              <CardDescription className='text-slate-400 pt-1 px-4'>
-                {error}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='flex flex-col gap-3 pt-4'>
+        <Card className='w-full max-w-md bg-red-900/20 border border-red-500/30 text-center backdrop-blur-sm animate-in fade-in duration-300'>
+          <CardHeader>
+            <div className='mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-red-900/50 border border-red-700/50 mb-4'>
+              <AlertTriangle
+                className='h-6 w-6 text-red-400'
+                aria-hidden='true'
+              />
+            </div>
+            <CardTitle className='text-2xl font-semibold text-slate-100'>
+              Loading Error
+            </CardTitle>
+            <CardDescription className='text-slate-400 pt-1 px-4'>
+              {error}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='flex flex-col gap-3 pt-4'>
+            <Button
+              onClick={() => fetchData()}
+              variant='secondary'
+              className='w-full border-slate-600 hover:bg-slate-800 h-10 transition-colors duration-200'
+              aria-label='Retry loading the response'
+            >
+              Try Again
+            </Button>
+            <Link href='/history' className='w-full'>
               <Button
-                onClick={() => fetchData()} // Retry button
-                variant='secondary'
-                className='w-full border-slate-600 hover:bg-slate-800 h-10'
+                variant='outline'
+                className='w-full border-slate-600 hover:bg-slate-800 h-10 transition-colors duration-200'
+                aria-label='Go back to response history'
               >
-                Try Again
+                <ArrowLeft className='mr-2 h-4 w-4' aria-hidden='true' /> Go
+                Back to History
               </Button>
-              <Link href='/history' className='w-full'>
-                <Button
-                  variant='outline'
-                  className='w-full border-slate-600 hover:bg-slate-800 h-10'
-                >
-                  <ArrowLeft className='mr-2 h-4 w-4' /> Go Back to History
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </motion.div>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  // --- Not Found State (simplified) ---
+  // --- Not Found State (optimized) ---
   if (!responseData) {
     return (
       <div className='min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 flex items-center justify-center p-4'>
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.3, ease: "easeOut" }}
-        >
-          <Card className='w-full max-w-md bg-slate-900/80 border-slate-700 text-center backdrop-blur-sm'>
-            <CardHeader>
-              <div className='mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-900/50 border border-blue-700/50 mb-4'>
-                <Frown className='h-6 w-6 text-blue-400' />
-              </div>
-              <CardTitle className='text-2xl font-semibold text-slate-100'>
-                Response Not Found
-              </CardTitle>
-              <CardDescription className='text-slate-400 pt-1'>
-                We couldn't find this application response. It might have been
-                deleted or doesn't belong to your account.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className='flex flex-col gap-3 pt-4'>
-              <Link href='/history' className='w-full'>
-                <Button
-                  variant='outline'
-                  className='w-full border-slate-600 hover:bg-slate-800 h-10'
-                >
-                  <ArrowLeft className='mr-2 h-4 w-4' /> Back to History
-                </Button>
-              </Link>
-              <Link href='/create' className='w-full'>
-                <Button className='w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white h-10 cursor-pointer'>
-                  <FilePlus className='mr-2 h-4 w-4' /> Create New Application
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </motion.div>
+        <Card className='w-full max-w-md bg-slate-900/80 border-slate-700 text-center backdrop-blur-sm animate-in fade-in duration-300'>
+          <CardHeader>
+            <div className='mx-auto flex items-center justify-center h-12 w-12 rounded-full bg-blue-900/50 border border-blue-700/50 mb-4'>
+              <Frown className='h-6 w-6 text-blue-400' aria-hidden='true' />
+            </div>
+            <CardTitle className='text-2xl font-semibold text-slate-100'>
+              Response Not Found
+            </CardTitle>
+            <CardDescription className='text-slate-400 pt-1'>
+              We couldn't find this application response. It might have been
+              deleted or doesn't belong to your account.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className='flex flex-col gap-3 pt-4'>
+            <Link href='/history' className='w-full'>
+              <Button
+                variant='outline'
+                className='w-full border-slate-600 hover:bg-slate-800 h-10 transition-colors duration-200'
+                aria-label='Go back to response history'
+              >
+                <ArrowLeft className='mr-2 h-4 w-4' aria-hidden='true' /> Back
+                to History
+              </Button>
+            </Link>
+            <Link href='/create' className='w-full'>
+              <Button
+                className='w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white h-10 transition-all duration-200'
+                aria-label='Create a new job application'
+              >
+                <FilePlus className='mr-2 h-4 w-4' aria-hidden='true' /> Create
+                New Application
+              </Button>
+            </Link>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
-  // --- Main Content (Render only if responseData is available) ---
-  const formattedDate = responseData.date
-    ? new Date(responseData.date).toLocaleDateString("en-US", {
-        year: "numeric",
-        month: "long",
-        day: "numeric",
-      })
-    : "Unknown date";
-
-  const applicationSections: {
-    key: ApplicationMaterialKey;
-    title: string;
-    icon: React.ReactNode;
-    gradient: string[];
-  }[] = [
-    {
-      key: "interestInCompany",
-      title: "Interest in Company",
-      icon: <Heart className='w-4 h-4' />,
-      gradient: ["from-pink-500", "to-red-500"],
-    },
-    {
-      key: "coverLetter",
-      title: "Cover Letter Snippet",
-      icon: <FileText className='w-4 h-4' />,
-      gradient: ["from-blue-500", "to-cyan-500"],
-    },
-    {
-      key: "whyFit",
-      title: "Why You're a Good Fit",
-      icon: <CheckCircle2 className='w-4 h-4' />,
-      gradient: ["from-green-500", "to-emerald-500"],
-    },
-    {
-      key: "valueAdd",
-      title: "Value You Bring",
-      icon: <Rocket className='w-4 h-4' />,
-      gradient: ["from-orange-500", "to-amber-500"],
-    },
-    {
-      key: "linkedinSummary",
-      title: "LinkedIn Outreach Snippet",
-      icon: <Linkedin className='w-4 h-4' />,
-      gradient: ["from-sky-600", "to-indigo-600"],
-    },
-    {
-      key: "shortAnswer",
-      title: "Quick Form Answer",
-      icon: <Zap className='w-4 h-4' />,
-      gradient: ["from-violet-500", "to-purple-500"],
-    },
-  ];
-
-  // Determine if there's any content to show at all
-  const hasApplicationMaterials =
-    applicationMaterials &&
-    Object.values(applicationMaterials).some((val) => !!val);
-  const hasInterviewQuestions = interviewQuestions.length > 0;
-  const hasAnyContent = hasApplicationMaterials || hasInterviewQuestions;
-
   return (
-    <motion.main
-      variants={pageTransition}
-      initial='hidden'
-      animate='visible'
-      exit='exit'
-      className='min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-slate-200 px-4 py-8 md:py-12'
-    >
+    <main className='min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-slate-200 px-4 py-8 md:py-12'>
       {/* Background elements */}
       <div className='absolute inset-0 overflow-hidden pointer-events-none -z-10'>
         <div className='absolute -top-40 -right-40 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[150px] opacity-50'></div>
         <div className='absolute top-1/3 -left-60 w-[400px] h-[400px] bg-blue-600/10 rounded-full blur-[120px] opacity-50'></div>
       </div>
-
       <div className='relative max-w-7xl mx-auto z-10'>
-        {/* Page Header Buttons (simplified) */}
-        <div className='flex flex-col sm:flex-row justify-between items-center mb-6 gap-4'>
+        {/* Page Header Navigation */}
+        <nav
+          className='flex flex-col sm:flex-row justify-between items-center mb-6 gap-4'
+          aria-label='Page navigation'
+        >
           <Link href='/history'>
             <Button
               variant='outline'
               size='sm'
-              className='flex items-center gap-2 bg-slate-800/50 border-slate-700 hover:bg-slate-700/50 text-slate-300 hover:text-white w-full sm:w-auto h-9 rounded-md'
+              className='flex items-center gap-2 bg-slate-800/50 border-slate-700 hover:bg-slate-700/50 text-slate-300 hover:text-white w-full sm:w-auto h-9 rounded-md transition-colors duration-200'
+              aria-label='Go back to response history'
             >
-              <ArrowLeft className='w-4 h-4' /> Back to History
+              <ArrowLeft className='w-4 h-4' aria-hidden='true' /> Back to
+              History
             </Button>
           </Link>
           <Link href='/create'>
             <Button
               size='sm'
-              className='flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white w-full sm:w-auto h-9 rounded-md cursor-pointer'
+              className='flex items-center gap-2 bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700 text-white w-full sm:w-auto h-9 rounded-md transition-all duration-200'
+              aria-label='Create a new job application'
             >
-              <FilePlus className='w-4 h-4' /> Create New Application
+              <FilePlus className='w-4 h-4' aria-hidden='true' /> Create New
+              Application
             </Button>
           </Link>
-        </div>
+        </nav>
 
-        {/* Application Header Card (simplified) */}
-        <Card className='mb-8 bg-slate-900/70 border-slate-700/80 backdrop-blur-lg shadow-xl'>
-          <CardHeader>
-            <div className='flex flex-col sm:flex-row justify-between items-start gap-3'>
-              <div>
-                <CardTitle className='text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 pb-1'>
-                  {responseData.jobTitle}
-                </CardTitle>
-                <div className='flex items-center gap-2 mt-1.5 text-slate-400'>
-                  <Building className='w-4 h-4 flex-shrink-0' />
-                  <span className='text-base md:text-lg'>
-                    {responseData.company}
-                  </span>
+        {/* Application Header */}
+        <header>
+          <Card className='mb-8 bg-slate-900/70 border-slate-700/80 backdrop-blur-lg shadow-xl'>
+            <CardHeader>
+              <div className='flex flex-col sm:flex-row justify-between items-start gap-3'>
+                <div>
+                  <CardTitle
+                    className='text-2xl md:text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 pb-1'
+                    id='job-title'
+                  >
+                    {responseData.jobTitle}
+                  </CardTitle>
+                  <div className='flex items-center gap-2 mt-1.5 text-slate-400'>
+                    <Building
+                      className='w-4 h-4 flex-shrink-0'
+                      aria-hidden='true'
+                    />
+                    <span
+                      className='text-base md:text-lg'
+                      aria-label={`Company: ${responseData.company}`}
+                    >
+                      {responseData.company}
+                    </span>
+                  </div>
+                </div>
+                <div className='text-xs text-slate-500 pt-1 sm:text-right flex-shrink-0'>
+                  <time dateTime={responseData.date}>
+                    Generated on: {formattedDate}
+                  </time>
                 </div>
               </div>
-              <div className='text-xs text-slate-500 pt-1 sm:text-right flex-shrink-0'>
-                Generated on: {formattedDate}
-              </div>
-            </div>
-          </CardHeader>
-        </Card>
+            </CardHeader>
+          </Card>
+        </header>
 
         {/* --- Content Area (Tabs) --- */}
         <div className='space-y-8'>
@@ -465,7 +504,7 @@ export default function ResponsePage() {
             </TabsList>
             <TabsContent value='applicationMaterials' className='space-y-8'>
               {/* Section 1: Application Materials */}
-              {hasApplicationMaterials && (
+              {contentFlags.hasApplicationMaterials && (
                 <section aria-labelledby='application-materials-heading'>
                   <h2
                     id='application-materials-heading'
@@ -509,7 +548,7 @@ export default function ResponsePage() {
 
             <TabsContent value='interviewPrep' className='space-y-8'>
               {/* Section 2: Interview Prep */}
-              {hasInterviewQuestions && (
+              {contentFlags.hasInterviewQuestions && (
                 <section aria-labelledby='interview-prep-heading'>
                   <h2
                     id='interview-prep-heading'
@@ -535,7 +574,7 @@ export default function ResponsePage() {
             </TabsContent>
 
             {/* Fallback if NO content exists at all */}
-            {!hasAnyContent && (
+            {!contentFlags.hasAnyContent && (
               <Card className='bg-slate-800/50 border-slate-700'>
                 <CardContent className='pt-6 text-center text-slate-400'>
                   No generated content (application materials or interview
@@ -546,6 +585,6 @@ export default function ResponsePage() {
           </Tabs>
         </div>
       </div>
-    </motion.main>
+    </main>
   );
 }

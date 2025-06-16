@@ -4,7 +4,6 @@ const ResumeSchema = new Schema({
   userId: {
     type: String,
     required: true,
-    index: true,
   },
   content: {
     type: Object,
