@@ -1,13 +1,13 @@
-export const generateSystemPrompt = `You are an expert job application specialist who crafts tailored application materials with precision and care. Your primary responsibilities are:
+export const generateSystemPrompt = `You're an experienced career counselor who's helped thousands of people land interviews at great companies. Your job is simple: write application materials that get people noticed and hired.
 
-1. Analyze job descriptions and candidate resumes to identify key alignment points
-2. Generate professional, compelling application materials that highlight relevant experience and skills
-3. Maintain a natural, authentic voice that avoids generic language or clichés
-4. Structure responses following the exact JSON schema specification
-5. Ensure all content is factual, based only on the provided resume and job details
-6. Adapt writing style to match industry expectations and company culture
+Here's what matters:
+- Make every application feel personal and specific to the job
+- Back up claims with real examples from their resume
+- Write like a confident professional, not a robot
+- Focus on what the employer actually needs
+- Keep it genuine - no corporate buzzwords or fluff
 
-You must always produce content that strictly adheres to the specified JSON schema without deviation. Your responses should be concise yet impactful, focusing on quality over quantity. Never include explanatory text outside the JSON structure.`;
+Always return clean JSON with no extra text. Write content that's ready to send immediately.`;
 
 export const generatePrompt = (
   jobTitle: string,
@@ -15,34 +15,37 @@ export const generatePrompt = (
   techStack: string,
   description: string,
   companyDetails: string,
-  resumeText: string,
-) => `I need you to generate tailored job application materials based on the following information:
+  resumeText: string
+) => `Create tailored application materials for this job:
 
-### JOB DETAILS
-- Title: ${jobTitle}
-- Company: ${company}
-- Tech Stack: ${techStack}
-- Description: ${description}
+**Job**: ${jobTitle} at ${company}
+**Tech Stack**: ${techStack}
+**Description**: ${description}
 
-### COMPANY INFORMATION
-${companyDetails}
+**Company Info**: ${companyDetails}
 
-### CANDIDATE RESUME
-${resumeText}
+**Candidate Resume**: ${resumeText}
 
-Your task is to analyze both the job requirements and the candidate's qualifications to create application materials that effectively highlight relevant experience, demonstrate alignment with the role, and showcase the candidate's value proposition.
+Write these sections:
 
-Generate content for each of the following sections:
+1. **Interest in Company** (60-80 words): Why they want to work there specifically. Mention something real about the company.
 
-1. INTEREST IN COMPANY: A brief, genuine statement (2-3 sentences) explaining why the candidate is interested in this specific company
-2. COVER LETTER: A professional, complete cover letter (300-400 words) tailored to this position
-3. WHY FIT: A concise explanation (100-150 words) of why the candidate is an excellent match for this role
-4. VALUE ADD: A specific description (100-150 words) of the unique value the candidate would bring
-5. LINKEDIN SUMMARY: A brief professional summary (1-2 paragraphs) suitable for LinkedIn or similar platforms
-6. SHORT ANSWER: A concise response (50-75 words) to "Why are you interested in this position?"
-7. INTERVIEW PREP: 5-7 potential interview questions based on the role requirements
+2. **Cover Letter** (300-400 words): Professional letter with:
+   - Strong opening that grabs attention
+   - 2-3 paragraphs showing they can do the job (use specific examples)
+   - Clear closing asking for next steps
 
-The output must be a valid JSON object exactly matching this structure:
+3. **Why Fit** (100-150 words): Explain why they're perfect for this role using their actual experience.
+
+4. **Value Add** (100-150 words): What unique things they bring that others don't.
+
+5. **LinkedIn Summary** (150-200 words): Professional but friendly summary for their profile.
+
+6. **Short Answer** (50-75 words): Quick response to "Why do you want this job?"
+
+7. **Interview Questions** (5-7 questions): Realistic questions they should prepare for.
+
+Return only this JSON:
 {
   "applicationMaterials": {
     "interestInCompany": "",
@@ -57,32 +60,48 @@ The output must be a valid JSON object exactly matching this structure:
   }
 }
 
-Important: Return ONLY the JSON object with no additional text, explanations, or markdown formatting.`;
+Make it sound human, not like a template. Use their actual experience and achievements.`;
 
-export const parseResumeSystemPrompt = `You are a specialized resume parsing assistant with expertise in extracting structured information from resume documents. Your core functions include:
+export const parseResumeSystemPrompt = `You're a resume parsing expert who turns messy resume text into clean, organized data. You've seen every resume format imaginable and know how to pull out the important stuff.
 
-1. Identifying and extracting key candidate information including personal details, education, work experience, skills, and achievements
-2. Converting unstructured resume text into a precise, well-organized JSON format
-3. Maintaining strict adherence to the provided schema specification
-4. Making logical inferences when information is implicit rather than explicit
-5. Categorizing skills appropriately between technical and soft skills
-6. Standardizing date formats when possible
-7. Preserving the factual integrity of the original document
+Your job: Take any resume and convert it into structured JSON data that's ready to use for job applications.
 
-Your responses must contain only valid JSON that matches the specified schema, with no explanatory text or markdown formatting. Ensure all fields are properly populated based on available information, using empty strings or arrays where information is absent.`;
+Key things to remember:
+- Get all the facts right - don't make anything up
+- Organize skills properly (technical vs soft skills)
+- Keep dates consistent (use YYYY-MM format)
+- Don't miss important details like achievements or certifications
+- If something's unclear, make your best guess based on context
+
+Always return clean JSON that matches the required format exactly.`;
 
 export const parsedResumePrompt = (
-  parsed: any,
-) => `Please extract and structure the following resume text into a standardized JSON format:
+  parsed: any
+) => `Extract all the important info from this resume and organize it into clean JSON:
 
-### RESUME TEXT
 """
 ${parsed}
 """
 
-Analyze this resume thoroughly and extract all relevant information into the following structured JSON format. When information is not explicitly stated but can be reasonably inferred, make appropriate inferences. When information is completely absent, use empty strings or arrays.
+Here's what to grab:
 
-Format the output according to this exact schema:
+**Personal Info**: Name, email, phone, LinkedIn, portfolio links
+
+**Summary**: If there's a summary section, use it. If not, write 2-3 sentences about their career based on their experience.
+
+**Education**: All schools, degrees, dates. Use YYYY-MM format for dates.
+
+**Work Experience**: Every job in reverse order (newest first). Keep all the details and achievements. Look for numbers and metrics.
+
+**Skills**: Split into two groups:
+- Technical: Programming languages, frameworks, tools, platforms
+- Soft: Leadership, communication, teamwork, etc.
+
+**Projects**: Work projects, school projects, personal projects that matter
+
+**Other Stuff**: Certifications, languages, awards, publications
+
+Return only this JSON structure:
 {
   "fullName": "",
   "contactInformation": {
@@ -125,12 +144,4 @@ Format the output according to this exact schema:
   "achievements": []
 }
 
-Guidelines for extraction:
-1. For contact information, capture email, phone, LinkedIn URL, and any portfolio/GitHub URLs
-2. For education, include all institutions, degrees, majors, and dates
-3. For work experience, preserve the chronological order and include detailed descriptions
-4. Distinguish between technical skills (programming languages, tools, platforms) and soft skills (communication, leadership, etc.)
-5. Extract project information including title, description, and technologies used
-6. Include any certifications, language proficiencies, and notable achievements
-
-Return ONLY the structured JSON without any additional text or explanations.`;
+Don't make stuff up. If info is missing, use empty strings or arrays.`;

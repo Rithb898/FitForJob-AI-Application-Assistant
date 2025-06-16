@@ -2,7 +2,6 @@
 
 import { ArrowRight, Zap } from "lucide-react";
 import Link from "next/link";
-import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import Image from "next/image";
 import { SignedIn, UserButton } from "@clerk/nextjs";

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { useAppState, AppState as AppStateType } from "@/hooks/useAppState";
+import { useAppState } from "@/hooks/useAppState";
 import { useResumeManager } from "@/hooks/useResumeManager";
 import { useJobFormSubmit } from "@/hooks/useJobFormSubmit";
 import { useForm } from "react-hook-form";
@@ -28,34 +28,24 @@ import {
   History,
   CheckCircle2,
   AlertCircle,
-  Sparkles, // Added for Generate button
+  Sparkles,
 } from "lucide-react";
-// Removed useDropzone import, it's now in ResumeUploader
 import { Progress } from "./ui/progress";
-import ResumeUploader from "./ResumeUploader"; // Import the new component
+import ResumeUploader from "./ResumeUploader";
 import Link from "next/link";
-import { motion } from "motion/react"; // Import motion and AnimatePresence
-// Libraries for form handling, validation, notifications, animations
+import { motion } from "motion/react";
 
-// --- Form Schema ---
-// Defines the structure and validation rules for the job form using Zod
 const formSchema = z.object({
   jobTitle: z.string().min(1, "Job title is required"),
   company: z.string().min(1, "Company name is required"),
   techStack: z.string().min(1, "Tech stack is required"),
   description: z
     .string()
-    .min(50, "Please provide a more detailed description (min 50 chars)"), // Added min length
-  companyDetails: z.string().optional(), // Made optional, but still available
+    .min(50, "Please provide a more detailed description (min 50 chars)"),
+  companyDetails: z.string().optional(),
 });
 
-// AppState type is now imported from the hook
-
-// --- JobForm Component ---
-// Main component for the job application form page
 export default function JobForm() {
-  // --- Hooks Initialization ---
-  // Initialize app state, resume manager, and form submission logic
   const { appState, updateState } = useAppState();
   const {
     resume,
@@ -72,8 +62,6 @@ export default function JobForm() {
     parsedResume,
   });
 
-  // --- Form Setup ---
-  // useForm (react-hook-form): Manages form state, validation, and submission
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
@@ -85,19 +73,15 @@ export default function JobForm() {
     },
   });
 
-  // --- Derived State/Control Variables ---
-  // Calculate flags based on appState and parsedResume to control UI elements (e.g., button disabled state)
   const isProcessing =
     appState.status === "parsing" || appState.status === "generating";
   const isResumeReady = !!parsedResume && appState.status !== "parsing";
   const canSubmit = isResumeReady && !isProcessing;
 
-  // --- Status Indicator Component ---
-  // A sub-component to display the current status (parsing, generating, error, success) with progress and messages
   const StatusIndicator = () => {
     if (appState.status === "idle" && !isResumeReady && appState.progress === 0)
-      return null; // Hide if truly idle initially
-    if (appState.status === "complete") return null; // Hide once complete and redirecting
+      return null;
+    if (appState.status === "complete") return null;
 
     let icon = <Loader2 className='h-4 w-4 animate-spin text-blue-400' />;
     let colorClass = "text-blue-400";
@@ -115,14 +99,13 @@ export default function JobForm() {
       bgColorClass = "bg-green-900/30 border-green-700";
       progressColorVar = "hsl(142.1 76.2% 36.3%)";
     }
-    // Keep loading icon for parsing/generating
 
     return (
       <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        exit={{ opacity: 0, y: -20 }}
-        transition={{ duration: 0.3 }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.8, ease: "easeOut" }}
         className={`w-full p-3 px-4 mt-6 mb-2 rounded-lg border ${bgColorClass}`}
         style={{ "--primary": progressColorVar } as React.CSSProperties}
       >
@@ -156,27 +139,19 @@ export default function JobForm() {
     );
   };
 
-  // --- Main Component Return (JSX) ---
-  // Renders the overall page structure and the form
   return (
     <main className='min-h-screen bg-gradient-to-br from-slate-950 via-indigo-950 to-slate-950 text-slate-200'>
-      {/* --- Background Elements --- */}
-      {/* Decorative gradient elements for visual appeal */}
       <div className='absolute inset-0 overflow-hidden pointer-events-none'>
         <div className='absolute -top-40 -right-40 w-[500px] h-[500px] bg-purple-600/10 rounded-full blur-[150px]'></div>
         <div className='absolute top-1/3 -left-60 w-[400px] h-[400px] bg-blue-600/10 rounded-full blur-[120px]'></div>
       </div>
 
-      {/* --- Page Container --- */}
-      {/* Main content wrapper with padding and max-width */}
       <div className='relative max-w-7xl mx-auto px-4 py-12 md:py-10 z-10'>
-        {/* --- Header Section --- */}
-        {/* Displays the title, description, and a link to the history page */}
         <motion.div
           className='flex flex-col sm:flex-row items-center justify-between mb-10'
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, ease: "easeOut" }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
         >
           <div>
             <h1 className='text-3xl md:text-4xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-purple-400 via-blue-400 to-cyan-400 pb-1'>
@@ -187,7 +162,11 @@ export default function JobForm() {
             </p>
           </div>
           <Link href='/history' className='mt-4 sm:mt-0'>
-            <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
+            <motion.div
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              transition={{ type: "spring", stiffness: 400, damping: 25 }}
+            >
               <Button
                 variant='outline'
                 size='sm'
@@ -200,26 +179,17 @@ export default function JobForm() {
           </Link>
         </motion.div>
 
-        {/* --- Form Card --- */}
-        {/* The main card containing the form elements, styled with background blur and border */}
         <motion.div
           className='bg-slate-900/70 border border-slate-700/80 rounded-xl shadow-2xl shadow-indigo-950/30 backdrop-blur-lg overflow-hidden'
-          initial={{ opacity: 0, y: 20, scale: 0.98 }}
-          animate={{ opacity: 1, y: 0, scale: 1 }}
-          transition={{ duration: 0.6, delay: 0.1, ease: "easeOut" }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8, delay: 0.2, ease: "easeOut" }}
         >
-          {/* --- React Hook Form Provider --- */}
-          {/* Wraps the form to provide context */}
           <Form {...form}>
-            {/* --- HTML Form Element --- */}
-            {/* Handles the actual form submission, linked to the useForm hook */}
-            {/* Use handleFormSubmit from the hook */}
             <form
               onSubmit={form.handleSubmit(handleFormSubmit)}
               className='divide-y divide-slate-700/80'
             >
-              {/* --- Form Section: Job Information --- */}
-              {/* Fields for Job Title, Company, and Tech Stack/Keywords */}
               <div className='p-6 space-y-5'>
                 <h3 className='text-lg font-semibold text-slate-100 flex items-center gap-2'>
                   <Briefcase className='w-5 h-5 text-purple-400' />
@@ -292,23 +262,20 @@ export default function JobForm() {
                 />
               </div>
 
-              {/* --- Form Section: Resume Upload --- */}
-              {/* Renders the ResumeUploader component to handle file input and parsing status */}
               <div className='p-6 space-y-4'>
                 <h3 className='text-lg font-semibold text-slate-100 flex items-center gap-2'>
                   <FileText className='w-5 h-5 text-purple-400' />
                   Your Resume
                 </h3>
-                {/* Render the ResumeUploader component */}
                 <ResumeUploader
-                  resume={resume} // From useResumeManager
-                  setResume={setResume} // From useResumeManager
-                  parsedResume={parsedResume} // From useResumeManager
-                  setParsedResume={setParsedResume} // From useResumeManager
-                  appState={appState} // Pass state from useAppState
-                  updateState={updateState} // Pass update function from useAppState
-                  clearResume={handleClearResume} // From useResumeManager
-                  parseResume={handleParseResume} // From useResumeManager
+                  resume={resume}
+                  setResume={setResume}
+                  parsedResume={parsedResume}
+                  setParsedResume={setParsedResume}
+                  appState={appState}
+                  updateState={updateState}
+                  clearResume={handleClearResume}
+                  parseResume={handleParseResume}
                 />
                 {!isResumeReady && !isProcessing && (
                   <FormDescription className='text-xs text-center text-slate-500 pt-1'>
@@ -318,8 +285,6 @@ export default function JobForm() {
                 )}
               </div>
 
-              {/* --- Form Section: Additional Context --- */}
-              {/* Text areas for Job Description and optional Company Details */}
               <div className='p-6 space-y-5'>
                 <h3 className='text-lg font-semibold text-slate-100 flex items-center gap-2'>
                   <Info className='w-5 h-5 text-purple-400' />
@@ -368,10 +333,6 @@ export default function JobForm() {
                 />
               </div>
 
-              {/* --- Form Section: Actions & Status --- */}
-              {/* Displays the StatusIndicator component */}
-              {/* Contains the main submit button ("Generate AI Responses") */}
-              {/* Shows conditional messages (e.g., "upload resume" prompt) */}
               <div className='p-6'>
                 <StatusIndicator />
 
@@ -384,15 +345,13 @@ export default function JobForm() {
                 >
                   {appState.status === "generating" ? (
                     <>
-                      {" "}
-                      <Loader2 className='h-5 w-5 animate-spin' />{" "}
-                      Generating...{" "}
+                      <Loader2 className='h-5 w-5 animate-spin' />
+                      Generating...
                     </>
                   ) : (
                     <>
-                      {" "}
-                      Generate AI Responses{" "}
-                      <Sparkles className='h-5 w-5 ml-1 opacity-80' />{" "}
+                      Generate AI Responses
+                      <Sparkles className='h-5 w-5 ml-1 opacity-80' />
                     </>
                   )}
                 </Button>

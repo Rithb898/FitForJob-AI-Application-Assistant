@@ -5,8 +5,7 @@ import { useDropzone, Accept } from "react-dropzone";
 import { Button } from "@/components/ui/button";
 import { Loader2, CheckCircle2, UploadCloud, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
-import { motion } from "motion/react"; // Corrected import path
-import { AppState } from "@/hooks/useAppState"; // Assuming AppState type is exported or moved
+import { AppState } from "@/hooks/useAppState";
 
 interface ResumeUploaderProps {
   resume: File | null;
@@ -33,19 +32,26 @@ const ResumeUploader: React.FC<ResumeUploaderProps> = ({
     appState.status === "parsing" || appState.status === "generating";
   const isResumeReady = !!parsedResume && appState.status !== "parsing";
 
-  const { getRootProps, getInputProps, isDragActive, open } = useDropzone({
-    accept: { "application/pdf": [".pdf"] } as Accept, // Ensure correct type for accept
+  const { getRootProps, getInputProps, isDragActive } = useDropzone({
+    accept: { "application/pdf": [".pdf"] } as Accept,
     maxFiles: 1,
-    noClick: !!parsedResume, // Don't open file dialog if parsed
+    maxSize: 10 * 1024 * 1024, // 10 MB
+    noClick: !!parsedResume,
     noKeyboard: !!parsedResume,
     onDrop: async (acceptedFiles) => {
       const file = acceptedFiles[0];
       if (file) {
         setResume(file);
-        toast.dismiss(); // Dismiss any previous toasts
-        toast.loading("Parsing resume...");
-        await parseResume(file); // Call the parsing function passed from parent
-        toast.dismiss(); // Dismiss loading toast
+        toast.loading("Parsing resume…");
+        try {
+          await parseResume(file);
+        } catch (err) {
+          toast.error("Failed to parse résumé. Please try again.");
+          console.error(err);
+        } finally {
+          toast.dismiss();
+        }
+        toast.dismiss();
       }
     },
     disabled: isProcessing,
@@ -63,54 +69,50 @@ const ResumeUploader: React.FC<ResumeUploaderProps> = ({
     >
       <input {...getInputProps()} disabled={isProcessing || !!parsedResume} />
       {isResumeReady ? (
-        <div className="text-center">
-          <CheckCircle2 className="h-10 w-10 text-green-400 mx-auto mb-3" />
-          <p className="font-medium text-slate-100">
+        <div className='text-center'>
+          <CheckCircle2 className='h-10 w-10 text-green-400 mx-auto mb-3' />
+          <p className='font-medium text-slate-100'>
             {resume?.name || "Resume Ready"}
           </p>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className='text-xs text-slate-400 mt-1'>
             AI processing complete. Resume is ready.
           </p>
           <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="mt-3 text-xs text-purple-400 hover:text-purple-300 hover:bg-purple-900/30 h-auto px-2 py-1"
+            type='button'
+            variant='ghost'
+            size='sm'
+            className='mt-3 text-xs text-purple-400 hover:text-purple-300 hover:bg-purple-900/30 h-auto px-2 py-1 cursor-pointer'
             onClick={(e) => {
               e.stopPropagation(); // Prevent dropzone activation
               clearResume(); // Call clear function from parent
             }}
             disabled={isProcessing}
           >
-            <RefreshCw className="w-3 h-3 mr-1" /> Change Resume
+            <RefreshCw className='w-3 h-3 mr-1' /> Change Resume
           </Button>
         </div>
       ) : appState.status === "parsing" ? (
-        <div className="text-center">
-          <Loader2 className="h-10 w-10 text-blue-400 mx-auto mb-3 animate-spin" />
-          <p className="font-medium text-slate-200">Parsing Resume...</p>
-          <p className="text-xs text-slate-400 mt-1">{resume?.name}</p>
+        <div className='text-center'>
+          <Loader2 className='h-10 w-10 text-blue-400 mx-auto mb-3 animate-spin' />
+          <p className='font-medium text-slate-200'>Parsing Resume...</p>
+          <p className='text-xs text-slate-400 mt-1'>{resume?.name}</p>
         </div>
       ) : isDragActive ? (
-        <div className="text-center pointer-events-none">
-          <UploadCloud className="h-10 w-10 text-purple-400 mx-auto mb-3" />
-          <p className="font-medium text-purple-300">Drop the PDF file here</p>
+        <div className='text-center pointer-events-none'>
+          <UploadCloud className='h-10 w-10 text-purple-400 mx-auto mb-3' />
+          <p className='font-medium text-purple-300'>Drop the PDF file here</p>
         </div>
       ) : (
-        <div className="text-center">
-          <UploadCloud className="h-10 w-10 text-slate-500 mx-auto mb-3" />
-          <p className="font-medium text-slate-300">Drag & drop resume here</p>
-          <p className="text-xs text-slate-500 mt-1 mb-3">or</p>
-          <Button
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={open} // useDropzone's open function
-            disabled={isProcessing}
-          >
+        <div className='text-center'>
+          <UploadCloud className='h-10 w-10 text-slate-500 mx-auto mb-3' />
+          <p className='font-medium text-slate-300'>Drag & drop resume here</p>
+          <p className='text-xs text-slate-500 mt-1 mb-3'>
+            or click anywhere to upload
+          </p>
+          <div className='inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-slate-300 bg-slate-700 border border-slate-600 rounded-md hover:bg-slate-600 transition-colors'>
             Click to Upload PDF
-          </Button>
-          <p className="text-xs text-slate-600 mt-3">Max 10MB</p>
+          </div>
+          <p className='text-xs text-slate-600 mt-3'>Max 10MB</p>
         </div>
       )}
     </div>
