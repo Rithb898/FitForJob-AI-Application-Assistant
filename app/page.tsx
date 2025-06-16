@@ -5,7 +5,6 @@ import FinalCTASection from "@/sections/FinalCTASection";
 
 export default function LandingPage() {
   return (
-    // Remove the duplicate background, min-h-screen, and overflow-x-hidden
     <div className="text-slate-200">
       {/* Hero Section */}
       <HeroSection />
